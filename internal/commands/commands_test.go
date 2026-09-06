@@ -281,7 +281,7 @@ func TestSkillCommandsExist(t *testing.T) {
 		if strings.Contains(path, "<") || path == "security" {
 			continue
 		}
-		first := strings.Split(path, " ")[0]
+		first, _, _ := strings.Cut(path, " ")
 		if first == "commands" {
 			continue
 		}

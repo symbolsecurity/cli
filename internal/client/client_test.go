@@ -14,9 +14,9 @@ import (
 )
 
 func TestListPagination(t *testing.T) {
-	var pages int32
+	var pages atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&pages, 1)
+		n := pages.Add(1)
 		pag := output.Pagination{Page: int(n), PerPage: 1, TotalPages: 2, TotalEntriesSize: 2, CurrentEntriesSize: 1}
 		b, _ := json.Marshal(pag)
 		w.Header().Set("X-Pagination", string(b))
@@ -39,13 +39,13 @@ func TestListPagination(t *testing.T) {
 }
 
 func TestRefreshOn401(t *testing.T) {
-	var n int32
+	var n atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/auth/refresh/":
 			_ = json.NewEncoder(w).Encode(Token{AccessToken: "new", RefreshToken: "r2", TokenType: "bearer"})
 		case "/users/":
-			if atomic.AddInt32(&n, 1) == 1 {
+			if n.Add(1) == 1 {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = io.WriteString(w, `{"message":"Unauthorized"}`)
 				return
@@ -71,9 +71,9 @@ func TestRefreshOn401(t *testing.T) {
 }
 
 func TestNoRetryOnPost(t *testing.T) {
-	var n int32
+	var n atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&n, 1)
+		n.Add(1)
 		w.WriteHeader(500)
 		_, _ = io.WriteString(w, `{"message":"boom"}`)
 	}))
@@ -83,15 +83,15 @@ func TestNoRetryOnPost(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if atomic.LoadInt32(&n) != 1 {
-		t.Fatalf("retried POST: %d", n)
+	if n.Load() != 1 {
+		t.Fatalf("retried POST: %d", n.Load())
 	}
 }
 
 func TestRetryOn500(t *testing.T) {
-	var n int32
+	var n atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.AddInt32(&n, 1) == 1 {
+		if n.Add(1) == 1 {
 			w.WriteHeader(500)
 			_, _ = io.WriteString(w, `{"message":"boom"}`)
 			return

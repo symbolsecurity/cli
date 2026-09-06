@@ -320,10 +320,7 @@ func (c *Client) list(ctx context.Context, path string, query url.Values, opts P
 	if query == nil {
 		query = url.Values{}
 	}
-	page := opts.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(opts.Page, 1)
 	per := opts.PerPage
 	if per < 1 {
 		per = 50
