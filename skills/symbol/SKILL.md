@@ -1,6 +1,6 @@
 ---
 name: symbol
-description: Manage Symbol Security via the `symbol` CLI — users, training, policies, cyber threats, phishing, tickets, and MSP companies. Use when the user asks about Symbol, overdue training, urgent threats, phishing reports, or MSP child companies.
+description: Manage Symbol Security via the `symbol` CLI — users, training, policies, cyber threats, phishing, tickets, MSP companies, and monthly MSP schedules/activity. Use when the user asks about Symbol, overdue training, urgent threats, phishing reports, MSP child companies, or planned vs sent work this month.
 triggers:
   - symbol
   - symbol security
@@ -8,6 +8,8 @@ triggers:
   - cyber threats
   - phishing reports
   - MSP company
+  - MSP schedule
+  - monthly activity
 ---
 
 # Symbol Security
@@ -81,6 +83,21 @@ symbol companies features list <id> --json
 symbol programs list --json
 symbol programs assign <template_id> --company <id> --json
 ```
+
+### MSP: planned vs sent work this month
+
+Use for "what's scheduled this month?", "what actually went out?", QBRs, or catching companies with no activity.
+
+`--month` (1-12) and `--year` are required by the API. Optional `--company <id>` limits to one child.
+
+```sh
+symbol msp schedules --month 9 --year 2026 --json
+symbol msp activity --month 9 --year 2026 --json
+symbol msp schedules --month 9 --year 2026 --company <id> --json
+symbol msp activity --month 9 --year 2026 --company <id> --json
+```
+
+`schedules` = planned program work. `activity` = assigned/sent work that actually ran. Compare the two; do not `--all` across the whole MSP unless asked.
 
 ## Gotchas
 
