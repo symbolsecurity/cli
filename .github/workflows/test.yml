@@ -31,7 +31,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.5.0
+          version: v2.13.2
       - name: Build
         run: go build -ldflags "-X github.com/symbolsecurity/cli/internal/version.Commit=${GITHUB_SHA}" -o bin/symbol ./cmd/symbol
       - name: Vulnerability scan
