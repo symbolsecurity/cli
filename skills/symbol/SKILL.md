@@ -1,12 +1,16 @@
 ---
 name: symbol
-description: Manage Symbol Security via the `symbol` CLI — users, training, policies, cyber threats, phishing, tickets, MSP companies, and monthly MSP schedules/activity. Use when the user asks about Symbol, overdue training, urgent threats, phishing reports, MSP child companies, or planned vs sent work this month.
+description: Manage Symbol Security via the `symbol` CLI — users, training, policies, cyber threats, phishing simulations, reported phishing, tickets, MSP companies, and monthly MSP schedules/activity. Use when the user asks about Symbol, overdue training, unsigned policies, new-hire onboarding, offboarding, urgent threats, phishing, MSP child companies, or planned vs sent work this month.
 triggers:
   - symbol
   - symbol security
   - overdue training
+  - unsigned policies
+  - new hire onboarding
+  - offboarding
   - cyber threats
   - phishing reports
+  - phishing simulations
   - MSP company
   - MSP schedule
   - monthly activity
@@ -57,12 +61,40 @@ symbol threats status <id> --to RESOLVED --json
 symbol threats ignore <id> --yes --json
 ```
 
-### Assign a policy
+### Unsigned / overdue policies
 
 ```sh
 symbol policies list --json
+symbol policies assignments --status OVERDUE --json
+symbol policies assignments --status PENDING --json
 symbol policies assign --policy-id <id> --user-ids <id> --json
-symbol policies assignments --policy-id <id> --json
+```
+
+### Phishing program
+
+```sh
+symbol simulations list --json
+symbol simulations list --status FAILED --json
+symbol phishing list --json
+```
+
+### New-hire onboarding
+
+Create the user, then assign training and the required policy. Confirm IDs from `training assets` and `policies list` first.
+
+```sh
+symbol users create --email <email> --first-name <n> --last-name <n> --json
+symbol training assets --json
+symbol training assign --assets <id> --users <id> --json
+symbol policies list --json
+symbol policies assign --policy-id <id> --user-ids <id> --json
+```
+
+### Offboarding
+
+```sh
+symbol users list --keyword <email> --json
+symbol users delete <id> --yes --json
 ```
 
 ### List / create users
@@ -71,7 +103,6 @@ symbol policies assignments --policy-id <id> --json
 symbol users list --keyword <q> --json
 symbol users create --email <email> --first-name <n> --last-name <n> --json
 symbol users update <id> --title <title> --json
-symbol users delete <id> --yes --json
 ```
 
 ### MSP: pick a company, then operate
