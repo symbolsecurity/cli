@@ -8,15 +8,35 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/symbolsecurity/cli/internal/client"
+	"github.com/symbolsecurity/cli/internal/ident"
 	"github.com/symbolsecurity/cli/internal/output"
 )
+
+func uuidArg(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := cobra.ExactArgs(n)(cmd, args); err != nil {
+			return err
+		}
+		for _, a := range args {
+			if err := ident.UUID(a, "id"); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
 
 func (rt *Runtime) list(cmd *cobra.Command, path string, query url.Values, word string, crumbs []output.Breadcrumb) error {
 	data, pag, err := rt.Client.List(rt.ctx(cmd), path, query, rt.page())
 	if err != nil {
 		return rt.Out.Fail(err)
 	}
-	return rt.Out.Success(data, plural(client.Count(data), word), crumbs, pag)
+	n, isList := client.Count(data)
+	summary := word
+	if isList {
+		summary = plural(n, word)
+	}
+	return rt.Out.Success(data, summary, crumbs, pag)
 }
 
 func (rt *Runtime) get(cmd *cobra.Command, path string, query url.Values, summary string, crumbs []output.Breadcrumb) error {
@@ -56,6 +76,18 @@ func csv(v string) []string {
 		}
 	}
 	return out
+}
+
+func pathSeg(raw, name string) (string, error) {
+	return ident.Seg(raw, name)
+}
+
+func listSummary(data any, word string) string {
+	n, isList := client.Count(data)
+	if !isList {
+		return word
+	}
+	return plural(n, word)
 }
 
 func qset(q url.Values, k, v string) {

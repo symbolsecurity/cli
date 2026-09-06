@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/symbolsecurity/cli/internal/client"
+	"github.com/symbolsecurity/cli/internal/ident"
 	"github.com/symbolsecurity/cli/internal/output"
 )
 
@@ -32,7 +33,7 @@ func (rt *Runtime) companiesListCmd() *cobra.Command {
 			if err != nil {
 				return rt.Out.Fail(err)
 			}
-			return rt.Out.Success(data, plural(client.Count(data), "company"), []output.Breadcrumb{
+			return rt.Out.Success(data, listSummary(data, "company"), []output.Breadcrumb{
 				crumb("show", "symbol companies show <id>"),
 				crumb("create", "symbol companies create --name <name>"),
 			}, pag)
@@ -44,7 +45,7 @@ func (rt *Runtime) companiesShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show a company",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := rt.Client.Call(rt.ctx(cmd), http.MethodGet, "/msp/companies/"+args[0]+"/", nil, nil, true)
 			if err != nil {
@@ -116,7 +117,7 @@ func (rt *Runtime) companiesUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <id>",
 		Short: "Update a child company",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := companyBody(cmd, "", line1, line2, city, country, state, tz, zip)
 			if cmd.Flags().Changed("name") {
@@ -140,7 +141,7 @@ func (rt *Runtime) companiesDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a child company",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		Annotations: map[string]string{
 			"gotchas": "Destructive; requires --yes",
 		},
@@ -168,13 +169,17 @@ func (rt *Runtime) companiesFeaturesCmd() *cobra.Command {
 }
 
 func (rt *Runtime) companyArg(args []string) (string, error) {
+	id := rt.Company
 	if len(args) > 0 && args[0] != "" {
-		return args[0], nil
+		id = args[0]
 	}
-	if rt.Company != "" {
-		return rt.Company, nil
+	if id == "" {
+		return "", output.Usage("company id is required", "Pass <company_id> or --company")
 	}
-	return "", output.Usage("company id is required", "Pass <company_id> or --company")
+	if err := ident.UUID(id, "company id"); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (rt *Runtime) featuresListCmd() *cobra.Command {
@@ -191,7 +196,7 @@ func (rt *Runtime) featuresListCmd() *cobra.Command {
 				return rt.Out.Fail(err)
 			}
 			data := client.AsData(res.Body)
-			return rt.Out.Success(data, plural(client.Count(data), "feature"), []output.Breadcrumb{
+			return rt.Out.Success(data, listSummary(data, "feature"), []output.Breadcrumb{
 				crumb("enable", "symbol companies features enable "+id+" <feature>"),
 				crumb("disable", "symbol companies features disable "+id+" <feature> --yes"),
 			}, nil)
@@ -245,12 +250,26 @@ func (rt *Runtime) featuresDisableCmd() *cobra.Command {
 
 func (rt *Runtime) featureArgs(args []string) (string, string, error) {
 	if len(args) == 2 {
-		return args[0], args[1], nil
+		if err := ident.UUID(args[0], "company id"); err != nil {
+			return "", "", err
+		}
+		seg, err := ident.Seg(args[1], "feature")
+		if err != nil {
+			return "", "", err
+		}
+		return args[0], seg, nil
 	}
 	if rt.Company == "" {
 		return "", "", output.Usage("company id is required", "Pass <company_id> <feature> or --company with <feature>")
 	}
-	return rt.Company, args[0], nil
+	if err := ident.UUID(rt.Company, "company id"); err != nil {
+		return "", "", err
+	}
+	seg, err := ident.Seg(args[0], "feature")
+	if err != nil {
+		return "", "", err
+	}
+	return rt.Company, seg, nil
 }
 
 func (rt *Runtime) programsCmd() *cobra.Command {
@@ -268,7 +287,7 @@ func (rt *Runtime) programsListCmd() *cobra.Command {
 			if err != nil {
 				return rt.Out.Fail(err)
 			}
-			return rt.Out.Success(data, plural(client.Count(data), "program"), []output.Breadcrumb{
+			return rt.Out.Success(data, listSummary(data, "program"), []output.Breadcrumb{
 				crumb("assign", "symbol programs assign <template_id> --company <id>"),
 			}, pag)
 		},
@@ -279,7 +298,7 @@ func (rt *Runtime) programsAssignCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "assign <template_id>",
 		Short: "Assign a program template to a company",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if rt.Company == "" {
 				return rt.Out.Fail(output.Usage("company is required", "Pass --company <id>"))
@@ -317,7 +336,7 @@ func (rt *Runtime) mspActivityCmd() *cobra.Command {
 			if err != nil {
 				return rt.Out.Fail(err)
 			}
-			return rt.Out.Success(data, plural(client.Count(data), "item"), []output.Breadcrumb{crumb("schedules", "symbol msp schedules")}, pag)
+			return rt.Out.Success(data, listSummary(data, "item"), []output.Breadcrumb{crumb("schedules", "symbol msp schedules")}, pag)
 		},
 	}
 	cmd.Flags().StringVar(&month, "month", "", "Month")
@@ -348,7 +367,7 @@ func (rt *Runtime) mspSchedulesCmd() *cobra.Command {
 			if err != nil {
 				return rt.Out.Fail(err)
 			}
-			return rt.Out.Success(data, plural(client.Count(data), "schedule"), []output.Breadcrumb{crumb("activity", "symbol msp activity")}, pag)
+			return rt.Out.Success(data, listSummary(data, "schedule"), []output.Breadcrumb{crumb("activity", "symbol msp activity")}, pag)
 		},
 	}
 	cmd.Flags().StringVar(&month, "month", "", "Month")
@@ -370,7 +389,7 @@ func (rt *Runtime) mspUsersCmd() *cobra.Command {
 			if err != nil {
 				return rt.Out.Fail(err)
 			}
-			return rt.Out.Success(data, plural(client.Count(data), "user"), []output.Breadcrumb{crumb("companies", "symbol companies list")}, pag)
+			return rt.Out.Success(data, listSummary(data, "user"), []output.Breadcrumb{crumb("companies", "symbol companies list")}, pag)
 		},
 	}
 	cmd.Flags().StringVar(&typ, "type", "", "User type")

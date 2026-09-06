@@ -11,28 +11,28 @@ import (
 	"github.com/symbolsecurity/cli/skills"
 )
 
-func skillDirs(home string) []string {
-	return []string{
-		filepath.Join(home, ".config", "opencode", "skills"),
-		filepath.Join(home, ".claude", "skills"),
-		filepath.Join(home, ".codex", "skills"),
-		filepath.Join(home, ".cursor", "skills"),
-		filepath.Join(home, ".codeium", "windsurf", "skills"),
+type skillTarget struct {
+	Name   string
+	Skills string
+	Marker string
+}
+
+func skillTargets(home string) []skillTarget {
+	return []skillTarget{
+		{Name: "opencode", Skills: filepath.Join(home, ".config", "opencode", "skills"), Marker: filepath.Join(home, ".config", "opencode")},
+		{Name: "claude", Skills: filepath.Join(home, ".claude", "skills"), Marker: filepath.Join(home, ".claude")},
+		{Name: "codex", Skills: filepath.Join(home, ".codex", "skills"), Marker: filepath.Join(home, ".codex")},
+		{Name: "cursor", Skills: filepath.Join(home, ".cursor", "skills"), Marker: filepath.Join(home, ".cursor")},
+		{Name: "windsurf", Skills: filepath.Join(home, ".codeium", "windsurf", "skills"), Marker: filepath.Join(home, ".codeium", "windsurf")},
 	}
 }
 
-func agentPresent(home, skillsDir string) bool {
-	switch {
-	case filepath.Base(filepath.Dir(skillsDir)) == "opencode":
-		_, err := os.Stat(filepath.Join(home, ".config", "opencode"))
-		return err == nil
-	case filepath.Base(filepath.Dir(skillsDir)) == ".claude" || filepath.Base(skillsDir) == "skills" && filepath.Base(filepath.Dir(skillsDir)) == ".claude":
-		_, err := os.Stat(filepath.Join(home, ".claude"))
-		return err == nil
+func skillDirs(home string) []string {
+	var dirs []string
+	for _, t := range skillTargets(home) {
+		dirs = append(dirs, t.Skills)
 	}
-	parent := filepath.Dir(skillsDir)
-	_, err := os.Stat(parent)
-	return err == nil
+	return dirs
 }
 
 func (rt *Runtime) setupCmd() *cobra.Command {
@@ -42,18 +42,20 @@ func (rt *Runtime) setupCmd() *cobra.Command {
 		Short: "Install the embedded agent skill into detected agents",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			written := []map[string]string{}
-			for _, dir := range skillDirs(rt.Env.Home) {
-				if !allAgents && !agentPresent(rt.Env.Home, dir) {
-					continue
+			for _, t := range skillTargets(rt.Env.Home) {
+				if !allAgents {
+					if _, err := os.Stat(t.Marker); err != nil {
+						continue
+					}
 				}
-				dest := filepath.Join(dir, "symbol")
+				dest := filepath.Join(t.Skills, "symbol")
 				if err := os.MkdirAll(dest, 0o755); err != nil {
 					return rt.Out.Fail(err)
 				}
 				if err := copySkill(dest); err != nil {
 					return rt.Out.Fail(err)
 				}
-				written = append(written, map[string]string{"path": dest})
+				written = append(written, map[string]string{"agent": t.Name, "path": dest})
 			}
 			if len(written) == 0 {
 				return rt.Out.Fail(output.Usage("no agent skill directories detected", "Create an agent config dir or pass --all-agents"))

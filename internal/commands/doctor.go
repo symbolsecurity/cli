@@ -22,7 +22,7 @@ func (rt *Runtime) doctorCmd() *cobra.Command {
 			checks := []map[string]any{}
 			ok := true
 			add := func(name, status, detail string) {
-				if status != "ok" {
+				if status == "fail" {
 					ok = false
 				}
 				checks = append(checks, map[string]any{"name": name, "status": status, "detail": detail})
@@ -51,12 +51,10 @@ func (rt *Runtime) doctorCmd() *cobra.Command {
 				} else {
 					add("auth", "fail", err.Error())
 				}
+			} else if rt.Store.UsingFile() {
+				add("auth", "warn", "credentials on disk (0600); keyring unavailable")
 			} else {
-				store := "keyring"
-				if rt.Store.UsingFile() {
-					store = "file"
-				}
-				add("auth", "ok", store)
+				add("auth", "ok", "keyring")
 			}
 
 			if _, err := skills.FS.ReadFile("symbol/SKILL.md"); err != nil {

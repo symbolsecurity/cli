@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
@@ -174,4 +175,24 @@ func (s *Store) Clear() error {
 func (s *Store) UsingFile() bool {
 	_, err := os.Stat(s.filePath())
 	return err == nil
+}
+
+func (s *Store) WithLock(fn func() error) error {
+	dir := filepath.Join(s.Home, ".config", "symbol")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	lockDir := filepath.Join(dir, s.Profile+".lock")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		err := os.Mkdir(lockDir, 0o700)
+		if err == nil {
+			defer os.Remove(lockDir)
+			return fn()
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("credential lock timeout: %w", err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }

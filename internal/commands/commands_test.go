@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/symbolsecurity/cli/internal/auth"
 	"github.com/symbolsecurity/cli/internal/output"
+	"github.com/symbolsecurity/cli/skills"
 )
 
 func TestUsersListJSON(t *testing.T) {
@@ -42,7 +44,7 @@ func TestDeleteRequiresYes(t *testing.T) {
 		t.Fatal("should not call API")
 	}))
 	t.Cleanup(srv.Close)
-	out, err := run(t, srv, nil, "users", "delete", "u1", "--json")
+	out, err := run(t, srv, nil, "users", "delete", "11111111-1111-1111-1111-111111111111", "--json")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -57,14 +59,14 @@ func TestDeleteRequiresYes(t *testing.T) {
 func TestUsersDelete(t *testing.T) {
 	var called bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete || r.URL.Path != "/users/u1/" {
+		if r.Method != http.MethodDelete || r.URL.Path != "/users/11111111-1111-1111-1111-111111111111/" {
 			t.Fatalf("%s %s", r.Method, r.URL.Path)
 		}
 		called = true
 		w.WriteHeader(200)
 	}))
 	t.Cleanup(srv.Close)
-	out, err := run(t, srv, nil, "users", "delete", "u1", "--yes", "--json")
+	out, err := run(t, srv, nil, "users", "delete", "11111111-1111-1111-1111-111111111111", "--yes", "--json")
 	if err != nil {
 		t.Fatal(err, out)
 	}
@@ -135,6 +137,113 @@ func TestSetupWritesSkill(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".claude", "skills", "symbol", "SKILL.md")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestListCommands(t *testing.T) {
+	seen := map[string]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen[r.URL.Path] = true
+		io.WriteString(w, `[]`)
+	}))
+	t.Cleanup(srv.Close)
+	cases := []struct {
+		args []string
+		path string
+	}{
+		{[]string{"training", "list", "--json"}, "/training/list"},
+		{[]string{"policies", "list", "--json"}, "/policies"},
+		{[]string{"threats", "list", "--json"}, "/cyber-threats/results/"},
+		{[]string{"phishing", "list", "--json"}, "/reported-phishing"},
+		{[]string{"companies", "list", "--json"}, "/msp/companies"},
+	}
+	for _, tc := range cases {
+		out, err := run(t, srv, nil, tc.args...)
+		if err != nil {
+			t.Fatalf("%v: %v %s", tc.args, err, out)
+		}
+		if !seen[tc.path] {
+			t.Fatalf("%v did not hit %s (got %v)", tc.args, tc.path, seen)
+		}
+	}
+}
+
+func TestDryRunDelete(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not call API")
+	}))
+	t.Cleanup(srv.Close)
+	out, err := run(t, srv, nil, "users", "delete", "11111111-1111-1111-1111-111111111111", "--yes", "--dry-run", "--json")
+	if err != nil {
+		t.Fatal(err, out)
+	}
+	if !strings.Contains(out, "dry_run") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestInvalidProfile(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	out, err := run(t, srv, map[string]string{"SYMBOL_PROFILE": "../etc"}, "version", "--json")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(out, "usage_error") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestSkillCommandsExist(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	out, err := run(t, srv, nil, "commands", "--json")
+	if err != nil {
+		t.Fatal(err, out)
+	}
+	var env output.Envelope
+	if json.Unmarshal([]byte(out), &env) != nil {
+		t.Fatal(out)
+	}
+	raw, _ := json.Marshal(env.Data)
+	var data struct {
+		Commands []struct {
+			Path []string `json:"path"`
+		} `json:"commands"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, c := range data.Commands {
+		have[strings.Join(c.Path, " ")] = true
+	}
+	b, err := skills.FS.ReadFile("symbol/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile("(?m)(?:^|\\s|`)symbol ([a-z0-9-]+(?: [a-z0-9-]+)*)")
+	for _, m := range re.FindAllStringSubmatch(string(b), -1) {
+		path := m[1]
+		if strings.Contains(path, "<") || path == "security" {
+			continue
+		}
+		first := strings.Split(path, " ")[0]
+		if first == "commands" {
+			continue
+		}
+		if !have[path] && !have[first] {
+			ok := false
+			for k := range have {
+				if strings.HasPrefix(path, k) || strings.HasPrefix(k, path) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				t.Errorf("SKILL.md command not in CLI: %s", path)
+			}
+		}
 	}
 }
 

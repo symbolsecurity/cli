@@ -20,6 +20,9 @@ func (rt *Runtime) usersListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List users",
+		Annotations: map[string]string{
+			"gotchas": "Paginate; do not --all huge lists unless asked",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			qset(q, "keyword", keyword)
@@ -68,7 +71,7 @@ func (rt *Runtime) usersUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <id>",
 		Short: "Update a user",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if cmd.Flags().Changed("email") {
@@ -106,7 +109,7 @@ func (rt *Runtime) usersDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a user",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		Annotations: map[string]string{
 			"gotchas": "Destructive; requires --yes",
 		},

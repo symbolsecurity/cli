@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -15,9 +16,16 @@ import (
 
 	"github.com/symbolsecurity/cli/internal/auth"
 	"github.com/symbolsecurity/cli/internal/output"
+	"github.com/symbolsecurity/cli/internal/version"
 )
 
-const defaultTimeout = 30 * time.Second
+const (
+	defaultTimeout = 30 * time.Second
+	maxBodyBytes   = 32 << 20
+	maxPerPage     = 500
+	maxAllItems    = 10000
+	maxAllPages    = 200
+)
 
 type Token struct {
 	AccessToken  string `json:"accessToken"`
@@ -45,13 +53,14 @@ type Result struct {
 }
 
 type Client struct {
-	BaseURL    string
-	HTTP       *http.Client
-	Store      *auth.Store
-	CompanyID  string
-	creds      auth.Credentials
-	scoped     *Token
-	refreshing bool
+	BaseURL   string
+	HTTP      *http.Client
+	Store     *auth.Store
+	CompanyID string
+	DryRun    bool
+	Log       io.Writer
+	creds     auth.Credentials
+	scoped    *Token
 }
 
 func DefaultHTTP() *http.Client {
@@ -138,32 +147,50 @@ func (c *Client) exchange(ctx context.Context, apiKey, companyID string) (Token,
 }
 
 func (c *Client) refresh(ctx context.Context) (Token, error) {
-	if c.creds.RefreshToken == "" {
-		return Token{}, output.AuthError("Run: symbol auth login")
-	}
-	body := Token{RefreshToken: c.creds.RefreshToken}
-	res, err := c.do(ctx, http.MethodPost, "/auth/refresh/", nil, body, "", false)
-	if err != nil {
-		return Token{}, err
-	}
-	if res.Status >= 400 {
-		return Token{}, statusError(res.Status, res.Body, false)
-	}
-	var tok Token
-	if err := json.Unmarshal(res.Body, &tok); err != nil {
-		return Token{}, err
-	}
-	c.creds.AccessToken = tok.AccessToken
-	c.creds.RefreshToken = tok.RefreshToken
-	if tok.TokenType != "" {
-		c.creds.TokenType = tok.TokenType
-	}
-	if c.Store != nil {
-		if err := c.Store.Save(c.creds); err != nil {
+	run := func() (Token, error) {
+		if c.Store != nil {
+			creds, err := c.Store.Load()
+			if err == nil {
+				c.creds = creds
+			}
+		}
+		if c.creds.RefreshToken == "" {
+			return Token{}, output.AuthError("Run: symbol auth login")
+		}
+		body := Token{RefreshToken: c.creds.RefreshToken}
+		res, err := c.do(ctx, http.MethodPost, "/auth/refresh/", nil, body, "", false)
+		if err != nil {
 			return Token{}, err
 		}
+		if res.Status >= 400 {
+			return Token{}, statusError(res.Status, res.Body, false)
+		}
+		var tok Token
+		if err := json.Unmarshal(res.Body, &tok); err != nil {
+			return Token{}, err
+		}
+		c.creds.AccessToken = tok.AccessToken
+		c.creds.RefreshToken = tok.RefreshToken
+		if tok.TokenType != "" {
+			c.creds.TokenType = tok.TokenType
+		}
+		if c.Store != nil {
+			if err := c.Store.Save(c.creds); err != nil {
+				return Token{}, err
+			}
+		}
+		return tok, nil
 	}
-	return tok, nil
+	if c.Store == nil {
+		return run()
+	}
+	var tok Token
+	err := c.Store.WithLock(func() error {
+		var e error
+		tok, e = run()
+		return e
+	})
+	return tok, err
 }
 
 func (c *Client) ensureScoped(ctx context.Context) error {
@@ -178,7 +205,7 @@ func (c *Client) ensureScoped(ctx context.Context) error {
 	}
 	tok, err := c.exchange(ctx, c.creds.APIKey, c.CompanyID)
 	if err != nil {
-		return nil
+		return err
 	}
 	c.scoped = &tok
 	return nil
@@ -195,7 +222,7 @@ func (c *Client) resolve(path string, msp bool) string {
 	if strings.HasPrefix(path, "/msp/") {
 		return path
 	}
-	return "/msp/companies/" + c.CompanyID + path
+	return "/msp/companies/" + url.PathEscape(c.CompanyID) + path
 }
 
 func (c *Client) Get(ctx context.Context, path string, query url.Values) (Result, error) {
@@ -213,9 +240,25 @@ func (c *Client) Call(ctx context.Context, method, path string, query url.Values
 		}
 		return Result{}, err
 	}
+	if err := checkPath(path); err != nil {
+		return Result{}, err
+	}
 	if !msp {
-		_ = c.ensureScoped(ctx)
+		if err := c.ensureScoped(ctx); err != nil {
+			return Result{}, err
+		}
 		path = c.resolve(path, msp)
+	}
+	if c.DryRun && !idempotent(method) {
+		payload := map[string]any{"dry_run": true, "method": method, "path": path}
+		if body != nil {
+			payload["body"] = body
+		}
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Status: http.StatusOK, Body: b}, nil
 	}
 	token := c.creds.AccessToken
 	if !msp && c.scoped != nil {
@@ -289,9 +332,17 @@ func (c *Client) list(ctx context.Context, path string, query url.Values, opts P
 	if per < 1 {
 		per = 50
 	}
+	if per > maxPerPage {
+		per = maxPerPage
+	}
 	walk := opts.All || opts.Limit > 0
+	limit := opts.Limit
+	if opts.All && limit == 0 {
+		limit = maxAllItems
+	}
 	var items []any
 	var last *output.Pagination
+	pages := 0
 	for {
 		q := cloneValues(query)
 		q.Set("page", strconv.Itoa(page))
@@ -319,12 +370,19 @@ func (c *Client) list(ctx context.Context, path string, query url.Values, opts P
 			return obj, last, nil
 		}
 		items = append(items, chunk...)
-		if opts.Limit > 0 && len(items) >= opts.Limit {
-			items = items[:opts.Limit]
+		pages++
+		if limit > 0 && len(items) >= limit {
+			items = items[:limit]
+			if last != nil {
+				last.CurrentEntriesSize = len(items)
+			}
 			break
 		}
 		if last == nil || page >= last.TotalPages || len(chunk) == 0 {
 			break
+		}
+		if pages >= maxAllPages {
+			return nil, last, output.Usage("--all exceeded page cap", "Narrow filters or use --limit")
 		}
 		page++
 	}
@@ -341,6 +399,39 @@ func (c *Client) Multipart(ctx context.Context, method, path string, fields map[
 		}
 		return Result{}, err
 	}
+	if err := checkPath(path); err != nil {
+		return Result{}, err
+	}
+	if c.DryRun {
+		b, err := json.Marshal(map[string]any{"dry_run": true, "method": method, "path": path, "fields": fields})
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Status: http.StatusOK, Body: b}, nil
+	}
+	res, err := c.multipartOnce(ctx, method, path, fields, c.creds.AccessToken)
+	if err != nil {
+		return Result{}, err
+	}
+	if res.Status == http.StatusUnauthorized {
+		if _, rerr := c.refresh(ctx); rerr != nil {
+			return Result{}, output.AuthError("Run: symbol auth login")
+		}
+		res, err = c.multipartOnce(ctx, method, path, fields, c.creds.AccessToken)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	if res.Status == http.StatusUnauthorized {
+		return Result{}, output.AuthError("Run: symbol auth login")
+	}
+	if res.Status >= 400 {
+		return Result{}, statusError(res.Status, res.Body, res.Status >= 500)
+	}
+	return res, nil
+}
+
+func (c *Client) multipartOnce(ctx context.Context, method, path string, fields map[string][]string, token string) (Result, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 	for k, vs := range fields {
@@ -360,23 +451,19 @@ func (c *Client) Multipart(ctx context.Context, method, path string, fields map[
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.creds.AccessToken)
+	req.Header.Set("User-Agent", userAgent())
+	req.Header.Set("Authorization", "Bearer "+token)
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return Result{}, &output.Error{Message: err.Error(), Code: "network_error", Retryable: true}
 	}
 	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
+	b, err := readBody(res.Body)
 	if err != nil {
 		return Result{}, err
 	}
-	if res.StatusCode == http.StatusUnauthorized {
-		return Result{}, output.AuthError("Run: symbol auth login")
-	}
-	if res.StatusCode >= 400 {
-		return Result{}, statusError(res.StatusCode, b, res.StatusCode >= 500)
-	}
-	return Result{Status: res.StatusCode, Body: json.RawMessage(b)}, nil
+	c.logf("%s %s %d", method, path, res.StatusCode)
+	return Result{Status: res.StatusCode, Body: json.RawMessage(bytes.TrimSpace(b))}, nil
 }
 
 func (c *Client) Ping(ctx context.Context) error {
@@ -394,6 +481,9 @@ func (c *Client) Ping(ctx context.Context) error {
 
 func (c *Client) doRetry(ctx context.Context, method, path string, query url.Values, body any, authz string) (Result, error) {
 	res, err := c.do(ctx, method, path, query, body, authz, true)
+	if !idempotent(method) {
+		return res, err
+	}
 	if err != nil {
 		res, err = c.do(ctx, method, path, query, body, authz, true)
 		if err != nil {
@@ -436,6 +526,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		return Result{}, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent())
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -447,10 +538,11 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		return Result{}, &output.Error{Message: err.Error(), Code: "network_error", Retryable: retryable}
 	}
 	defer res.Body.Close()
-	b, err := io.ReadAll(res.Body)
+	b, err := readBody(res.Body)
 	if err != nil {
 		return Result{}, err
 	}
+	c.logf("%s %s %d", method, u.Path, res.StatusCode)
 	out := Result{Status: res.StatusCode, Body: json.RawMessage(bytes.TrimSpace(b))}
 	if ph := res.Header.Get("X-Pagination"); ph != "" {
 		var p output.Pagination
@@ -493,7 +585,7 @@ func statusError(status int, body []byte, retryable bool) error {
 		code = "api_error"
 		retryable = true
 	}
-	return &output.Error{Message: msg, Code: code, Retryable: retryable, Hint: hint, Status: status}
+	return &output.Error{Message: msg, Code: code, Retryable: retryable, Hint: hint, Status: status, RequestID: ae.RequestID}
 }
 
 func decodeList(body json.RawMessage) ([]any, any) {
@@ -512,11 +604,9 @@ func decodeList(body json.RawMessage) ([]any, any) {
 	if err := json.Unmarshal(trim, &obj); err != nil {
 		return []any{}, json.RawMessage(trim)
 	}
-	for _, k := range []string{"items", "data", "results", "tickets", "users"} {
-		if inner, ok := obj[k]; ok {
-			if arr, ok := inner.([]any); ok {
-				return arr, nil
-			}
+	if inner, ok := obj["items"]; ok {
+		if arr, ok := inner.([]any); ok {
+			return arr, nil
 		}
 	}
 	return nil, obj
@@ -542,13 +632,51 @@ func AsData(body json.RawMessage) any {
 	return v
 }
 
-func Count(data any) int {
+func Count(data any) (int, bool) {
 	switch v := data.(type) {
 	case []any:
-		return len(v)
+		return len(v), true
 	case []map[string]any:
-		return len(v)
+		return len(v), true
 	default:
-		return 1
+		return 0, false
 	}
+}
+
+func userAgent() string {
+	return "symbol-cli/" + version.Version
+}
+
+func idempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func checkPath(path string) error {
+	if strings.Contains(path, "..") {
+		return output.Usage("invalid path", "Path cannot contain ..")
+	}
+	return nil
+}
+
+func readBody(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxBodyBytes {
+		return nil, &output.Error{Message: "response too large", Code: "api_error", Hint: "Narrow filters or raise paging limits"}
+	}
+	return b, nil
+}
+
+func (c *Client) logf(format string, args ...any) {
+	if c.Log == nil {
+		return
+	}
+	fmt.Fprintf(c.Log, format+"\n", args...)
 }

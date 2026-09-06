@@ -60,15 +60,21 @@ func TestJQ(t *testing.T) {
 
 func TestRedact(t *testing.T) {
 	got := Redact(map[string]any{
-		"email":    "a@b.c",
-		"password": "hunter2",
-		"ssn":      "123-45-6789",
-		"note":     "4111111111111111",
+		"email":        "a@b.c",
+		"password":     "hunter2",
+		"ssn":          "123-45-6789",
+		"note":         "4111111111111111",
+		"accessToken":  "eyJhbGciOiJIUzI1NiJ9.aa.bb",
+		"refreshToken": "eyJhbGciOiJIUzI1NiJ9.cc.dd",
+		"token":        "secret-token",
 	}).(map[string]any)
 	if got["email"] != "a@b.c" {
 		t.Fatalf("email redacted: %v", got["email"])
 	}
 	if got["password"] != "[redacted]" || got["ssn"] != "[redacted]" || got["note"] != "[redacted]" {
 		t.Fatalf("expected redaction: %+v", got)
+	}
+	if got["accessToken"] != "[redacted]" || got["refreshToken"] != "[redacted]" || got["token"] != "[redacted]" {
+		t.Fatalf("tokens not redacted: %+v", got)
 	}
 }
