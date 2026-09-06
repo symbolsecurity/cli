@@ -187,7 +187,7 @@ func (s *Store) WithLock(fn func() error) error {
 	for {
 		err := os.Mkdir(lockDir, 0o700)
 		if err == nil {
-			defer os.Remove(lockDir)
+			defer func() { _ = os.Remove(lockDir) }()
 			return fn()
 		}
 		if time.Now().After(deadline) {

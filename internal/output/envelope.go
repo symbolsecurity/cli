@@ -155,7 +155,7 @@ func (p *Printer) Fail(err error) error {
 	if e.Hint != "" {
 		msg += "\n" + e.Hint
 	}
-	fmt.Fprintln(p.Out, msg)
+	_, _ = fmt.Fprintln(p.Out, msg)
 	return e
 }
 
@@ -167,18 +167,18 @@ func (p *Printer) writeJSON(v any) error {
 
 func (p *Printer) writeHuman(env Envelope) error {
 	if env.Summary != "" {
-		fmt.Fprintln(p.Out, env.Summary)
+		_, _ = fmt.Fprintln(p.Out, env.Summary)
 	}
 	if err := writeTable(p.Out, env.Data); err != nil {
 		return err
 	}
 	if env.Pagination != nil && env.Pagination.TotalPages > 1 {
-		fmt.Fprintf(p.Out, "page %d/%d (%d total)\n", env.Pagination.Page, env.Pagination.TotalPages, env.Pagination.TotalEntriesSize)
+		_, _ = fmt.Fprintf(p.Out, "page %d/%d (%d total)\n", env.Pagination.Page, env.Pagination.TotalPages, env.Pagination.TotalEntriesSize)
 	}
 	if len(env.Breadcrumbs) > 0 {
-		fmt.Fprintln(p.Out, "next:")
+		_, _ = fmt.Fprintln(p.Out, "next:")
 		for _, b := range env.Breadcrumbs {
-			fmt.Fprintf(p.Out, "  %s: %s\n", b.Action, b.Cmd)
+			_, _ = fmt.Fprintf(p.Out, "  %s: %s\n", b.Action, b.Cmd)
 		}
 	}
 	return nil
@@ -194,7 +194,7 @@ func writeTable(w io.Writer, data any) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(w, string(b))
+		_, _ = fmt.Fprintln(w, string(b))
 		return nil
 	}
 	keys := tableKeys(items)
@@ -203,7 +203,7 @@ func writeTable(w io.Writer, data any) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(w, string(b))
+		_, _ = fmt.Fprintln(w, string(b))
 		return nil
 	}
 	widths := make([]int, len(keys))
@@ -238,7 +238,7 @@ func printRow(w io.Writer, cols []string, widths []int) {
 	for i, c := range cols {
 		parts[i] = fmt.Sprintf("%-*s", widths[i], c)
 	}
-	fmt.Fprintln(w, strings.Join(parts, "  "))
+	_, _ = fmt.Fprintln(w, strings.Join(parts, "  "))
 }
 
 func asObjects(data any) []map[string]any {

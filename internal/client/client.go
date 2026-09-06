@@ -453,7 +453,7 @@ func (c *Client) multipartOnce(ctx context.Context, method, path string, fields 
 	if err != nil {
 		return Result{}, &output.Error{Message: err.Error(), Code: "network_error", Retryable: true}
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	b, err := readBody(res.Body)
 	if err != nil {
 		return Result{}, err
@@ -471,7 +471,7 @@ func (c *Client) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	res.Body.Close()
+	_ = res.Body.Close()
 	return nil
 }
 
@@ -533,7 +533,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return Result{}, &output.Error{Message: err.Error(), Code: "network_error", Retryable: retryable}
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	b, err := readBody(res.Body)
 	if err != nil {
 		return Result{}, err
@@ -674,5 +674,5 @@ func (c *Client) logf(format string, args ...any) {
 	if c.Log == nil {
 		return
 	}
-	fmt.Fprintf(c.Log, format+"\n", args...)
+	_, _ = fmt.Fprintf(c.Log, format+"\n", args...)
 }

@@ -21,10 +21,10 @@ func TestListPagination(t *testing.T) {
 		b, _ := json.Marshal(pag)
 		w.Header().Set("X-Pagination", string(b))
 		if n == 1 {
-			json.NewEncoder(w).Encode([]map[string]string{{"id": "1"}})
+			_ = json.NewEncoder(w).Encode([]map[string]string{{"id": "1"}})
 			return
 		}
-		json.NewEncoder(w).Encode([]map[string]string{{"id": "2"}})
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"id": "2"}})
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(t, srv.URL)
@@ -43,17 +43,17 @@ func TestRefreshOn401(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/auth/refresh/":
-			json.NewEncoder(w).Encode(Token{AccessToken: "new", RefreshToken: "r2", TokenType: "bearer"})
+			_ = json.NewEncoder(w).Encode(Token{AccessToken: "new", RefreshToken: "r2", TokenType: "bearer"})
 		case "/users/":
 			if atomic.AddInt32(&n, 1) == 1 {
 				w.WriteHeader(http.StatusUnauthorized)
-				io.WriteString(w, `{"message":"Unauthorized"}`)
+				_, _ = io.WriteString(w, `{"message":"Unauthorized"}`)
 				return
 			}
 			if got := r.Header.Get("Authorization"); got != "Bearer new" {
 				t.Errorf("auth %s", got)
 			}
-			json.NewEncoder(w).Encode([]any{})
+			_ = json.NewEncoder(w).Encode([]any{})
 		default:
 			w.WriteHeader(404)
 		}
@@ -75,7 +75,7 @@ func TestNoRetryOnPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&n, 1)
 		w.WriteHeader(500)
-		io.WriteString(w, `{"message":"boom"}`)
+		_, _ = io.WriteString(w, `{"message":"boom"}`)
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(t, srv.URL)
@@ -93,10 +93,10 @@ func TestRetryOn500(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&n, 1) == 1 {
 			w.WriteHeader(500)
-			io.WriteString(w, `{"message":"boom"}`)
+			_, _ = io.WriteString(w, `{"message":"boom"}`)
 			return
 		}
-		json.NewEncoder(w).Encode([]any{})
+		_ = json.NewEncoder(w).Encode([]any{})
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(t, srv.URL)
@@ -110,7 +110,7 @@ func TestScopedAuthFailsClosed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/auth/access/" {
 			w.WriteHeader(http.StatusNotFound)
-			io.WriteString(w, `{"message":"company not found"}`)
+			_, _ = io.WriteString(w, `{"message":"company not found"}`)
 			return
 		}
 		t.Fatalf("unexpected %s", r.URL.Path)
@@ -132,7 +132,7 @@ func TestLoginExchange(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer secret" {
 			t.Fatalf("auth %s", r.Header.Get("Authorization"))
 		}
-		json.NewEncoder(w).Encode(Token{AccessToken: "a", RefreshToken: "r", TokenType: "bearer"})
+		_ = json.NewEncoder(w).Encode(Token{AccessToken: "a", RefreshToken: "r", TokenType: "bearer"})
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(t, srv.URL)

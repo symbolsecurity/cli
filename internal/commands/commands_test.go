@@ -26,7 +26,7 @@ func TestUsersListJSON(t *testing.T) {
 			t.Fatalf("query %s", r.URL.RawQuery)
 		}
 		w.Header().Set("X-Pagination", `{"page":1,"per_page":50,"total_pages":1,"total_entries_size":1,"current_entries_size":1}`)
-		io.WriteString(w, `[{"id":"u1","email":"a@b.c","firstName":"A"}]`)
+		_, _ = io.WriteString(w, `[{"id":"u1","email":"a@b.c","firstName":"A"}]`)
 	}))
 	t.Cleanup(srv.Close)
 	out, err := run(t, srv, nil, "users", "list", "--training-status", "OVERDUE", "--json")
@@ -83,7 +83,7 @@ func TestAuthLogin(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer k3y" {
 			t.Fatalf("auth %s", r.Header.Get("Authorization"))
 		}
-		io.WriteString(w, `{"accessToken":"a","refreshToken":"r","tokenType":"bearer"}`)
+		_, _ = io.WriteString(w, `{"accessToken":"a","refreshToken":"r","tokenType":"bearer"}`)
 	}))
 	t.Cleanup(srv.Close)
 	out, err := run(t, srv, map[string]string{"SYMBOL_API_KEY": "k3y"}, "auth", "login", "--json")
@@ -144,7 +144,7 @@ func TestListCommands(t *testing.T) {
 	seen := map[string]bool{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen[r.URL.Path] = true
-		io.WriteString(w, `[]`)
+		_, _ = io.WriteString(w, `[]`)
 	}))
 	t.Cleanup(srv.Close)
 	cases := []struct {
@@ -199,7 +199,7 @@ func TestWrites(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = append(got, r.Method+" "+r.URL.Path)
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, `{"ok":true}`)
+		_, _ = io.WriteString(w, `{"ok":true}`)
 	}))
 	t.Cleanup(srv.Close)
 	uid := "11111111-1111-1111-1111-111111111111"

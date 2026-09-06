@@ -60,11 +60,11 @@ func (rt *Runtime) authLoginCmd() *cobra.Command {
 }
 
 func (rt *Runtime) promptKey() (string, error) {
-	fmt.Fprint(rt.Env.Stderr, "API key: ")
+	_, _ = fmt.Fprint(rt.Env.Stderr, "API key: ")
 	f, ok := rt.Env.Stdin.(*os.File)
 	if ok && term.IsTerminal(int(f.Fd())) {
 		b, err := term.ReadPassword(int(f.Fd()))
-		fmt.Fprintln(rt.Env.Stderr)
+		_, _ = fmt.Fprintln(rt.Env.Stderr)
 		if err != nil {
 			return "", err
 		}

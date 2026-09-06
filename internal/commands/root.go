@@ -228,10 +228,10 @@ func (rt *Runtime) setup(cmd *cobra.Command) error {
 		return rt.Out.Fail(output.Usage("--full requires --yes", "Pass --yes to disable PII redaction"))
 	}
 	if rt.Full {
-		fmt.Fprintln(rt.Env.Stderr, "warning: PII redaction disabled (--full)")
+		_, _ = fmt.Fprintln(rt.Env.Stderr, "warning: PII redaction disabled (--full)")
 	}
 	if u, err := url.Parse(cfg.BaseURL); err == nil && u.Scheme != "https" && !isLoopback(u.Hostname()) {
-		fmt.Fprintf(rt.Env.Stderr, "warning: SYMBOL_BASE_URL is not HTTPS (%s)\n", cfg.BaseURL)
+		_, _ = fmt.Fprintf(rt.Env.Stderr, "warning: SYMBOL_BASE_URL is not HTTPS (%s)\n", cfg.BaseURL)
 	}
 	return nil
 }
