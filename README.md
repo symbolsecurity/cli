@@ -45,10 +45,10 @@ symbol completion bash
 ## Develop
 
 ```sh
-make test
-make vet
-make fmt
-make build
+go test -race ./...
+go vet ./...
+gofmt -l .
+go build -o bin/symbol ./cmd/symbol
 ```
 
 See `CONTRIBUTING.md`. Publishing a GitHub Release runs GoReleaser and uploads binaries.

@@ -1,10 +1,10 @@
 # Contributing
 
 ```sh
-make test
-make vet
-make fmt
-make build
+go test -race ./...
+go vet ./...
+gofmt -l .
+go build -o bin/symbol ./cmd/symbol
 ```
 
 - Do not import `github.com/symbolsecurity/symbol`.
