@@ -1,6 +1,6 @@
 module github.com/symbolsecurity/cli
 
-go 1.25.3
+go 1.27.1
 
 require (
 	github.com/itchyny/gojq v0.12.19
