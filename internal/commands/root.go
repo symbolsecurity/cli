@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -15,6 +18,7 @@ import (
 	"github.com/symbolsecurity/cli/internal/auth"
 	"github.com/symbolsecurity/cli/internal/client"
 	"github.com/symbolsecurity/cli/internal/config"
+	"github.com/symbolsecurity/cli/internal/ident"
 	"github.com/symbolsecurity/cli/internal/output"
 	"github.com/symbolsecurity/cli/internal/version"
 )
@@ -50,6 +54,8 @@ type Runtime struct {
 	PerPage int
 	All     bool
 	Limit   int
+	Verbose bool
+	DryRun  bool
 }
 
 func Execute(args []string) error {
@@ -93,7 +99,9 @@ func ExecuteEnv(env Env) error {
 	cmd.SetIn(env.Stdin)
 	cmd.SetOut(env.Stdout)
 	cmd.SetErr(env.Stderr)
-	err := cmd.Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		if _, ok := err.(*output.Error); ok {
 			return err
@@ -133,6 +141,8 @@ func (rt *Runtime) root() *cobra.Command {
 	cmd.PersistentFlags().IntVar(&rt.PerPage, "per-page", 50, "Items per page")
 	cmd.PersistentFlags().BoolVar(&rt.All, "all", false, "Fetch all pages")
 	cmd.PersistentFlags().IntVar(&rt.Limit, "limit", 0, "Stop after N items")
+	cmd.PersistentFlags().BoolVar(&rt.Verbose, "verbose", false, "Log HTTP method, path, and status to stderr")
+	cmd.PersistentFlags().BoolVar(&rt.DryRun, "dry-run", false, "Print mutating requests without sending them")
 
 	cmd.AddCommand(
 		rt.authCmd(),
@@ -155,6 +165,7 @@ func (rt *Runtime) root() *cobra.Command {
 		rt.mspCmd(),
 		rt.setupCmd(),
 		rt.commandsCmd(),
+		rt.completionCmd(),
 	)
 
 	orig := cmd.HelpFunc()
@@ -185,13 +196,6 @@ func (rt *Runtime) setup(cmd *cobra.Command) error {
 	} else {
 		rt.Company = cfg.Company
 	}
-	rt.Config = cfg
-	rt.Store = auth.NewStore(rt.Env.Home, cfg.Profile, rt.Env.Keyring)
-	httpClient := rt.Env.HTTPClient
-	if httpClient == nil {
-		httpClient = client.DefaultHTTP()
-	}
-	rt.Client = client.New(cfg.BaseURL, rt.Store, cfg.Company, httpClient)
 	term := rt.Env.IsTerminal(rt.Env.Stdout)
 	rt.Out = output.NewPrinter(rt.Env.Stdout, rt.Env.Stderr, output.Options{
 		JSON:       rt.JSON,
@@ -201,7 +205,41 @@ func (rt *Runtime) setup(cmd *cobra.Command) error {
 		Full:       rt.Full,
 		IsTerminal: term,
 	})
+	if err := ident.Profile(cfg.Profile); err != nil {
+		return rt.Out.Fail(err)
+	}
+	if cfg.Company != "" {
+		if err := ident.UUID(cfg.Company, "company id"); err != nil {
+			return rt.Out.Fail(err)
+		}
+	}
+	rt.Config = cfg
+	rt.Store = auth.NewStore(rt.Env.Home, cfg.Profile, rt.Env.Keyring)
+	httpClient := rt.Env.HTTPClient
+	if httpClient == nil {
+		httpClient = client.DefaultHTTP()
+	}
+	rt.Client = client.New(cfg.BaseURL, rt.Store, cfg.Company, httpClient)
+	rt.Client.DryRun = rt.DryRun
+	if rt.Verbose {
+		rt.Client.Log = rt.Env.Stderr
+	}
+	if rt.Full {
+		fmt.Fprintln(rt.Env.Stderr, "warning: PII redaction disabled (--full)")
+	}
+	if u, err := url.Parse(cfg.BaseURL); err == nil && u.Scheme != "https" && !isLoopback(u.Hostname()) {
+		fmt.Fprintf(rt.Env.Stderr, "warning: SYMBOL_BASE_URL is not HTTPS (%s)\n", cfg.BaseURL)
+	}
 	return nil
+}
+
+func isLoopback(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 func (rt *Runtime) ctx(cmd *cobra.Command) context.Context {
@@ -291,6 +329,30 @@ func writeHelpJSON(cmd *cobra.Command, w io.Writer) error {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	return enc.Encode(env)
+}
+
+func (rt *Runtime) completionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:       "completion [bash|zsh|fish|powershell]",
+		Short:     "Generate shell completion",
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := cmd.Root()
+			switch args[0] {
+			case "bash":
+				return root.GenBashCompletion(rt.Env.Stdout)
+			case "zsh":
+				return root.GenZshCompletion(rt.Env.Stdout)
+			case "fish":
+				return root.GenFishCompletion(rt.Env.Stdout, true)
+			case "powershell":
+				return root.GenPowerShellCompletionWithDesc(rt.Env.Stdout)
+			default:
+				return rt.Out.Fail(output.Usage("unknown shell", "Use bash, zsh, fish, or powershell"))
+			}
+		},
+	}
 }
 
 func crumb(action, cmd string) output.Breadcrumb {

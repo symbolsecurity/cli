@@ -28,6 +28,9 @@ func (rt *Runtime) threatsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List cyber threat results",
+		Annotations: map[string]string{
+			"gotchas": "Paginate; do not --all huge lists unless asked",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			qset(q, "status", status)
@@ -54,7 +57,7 @@ func (rt *Runtime) threatsStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <id>",
 		Short: "Update a threat result status",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			to = strings.ToUpper(to)
 			switch to {
@@ -77,7 +80,7 @@ func (rt *Runtime) threatsIgnoreCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ignore <id>",
 		Short: "Ignore a threat result",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		Annotations: map[string]string{
 			"gotchas": "Requires --yes",
 		},
@@ -96,7 +99,7 @@ func (rt *Runtime) threatsDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a threat result",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		Annotations: map[string]string{
 			"gotchas": "Destructive; requires --yes",
 		},
@@ -162,7 +165,11 @@ func (rt *Runtime) threatsKeywordsDeleteCmd() *cobra.Command {
 			if err := rt.requireYes("delete this keyword"); err != nil {
 				return rt.Out.Fail(err)
 			}
-			return rt.mutate(cmd, http.MethodDelete, rt.companyPath("/cyber-threats/keywords/"+args[0]+"/"), nil, "keyword deleted", []output.Breadcrumb{
+			seg, err := pathSeg(args[0], "keyword")
+			if err != nil {
+				return rt.Out.Fail(err)
+			}
+			return rt.mutate(cmd, http.MethodDelete, rt.companyPath("/cyber-threats/keywords/"+seg+"/"), nil, "keyword deleted", []output.Breadcrumb{
 				crumb("list", "symbol threats keywords list"),
 			})
 		},

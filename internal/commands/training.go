@@ -20,6 +20,9 @@ func (rt *Runtime) trainingListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List training assignments",
+		Annotations: map[string]string{
+			"gotchas": "Paginate; do not --all huge lists unless asked",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			qset(q, "from", from)

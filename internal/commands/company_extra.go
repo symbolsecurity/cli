@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/symbolsecurity/cli/internal/client"
+	"github.com/symbolsecurity/cli/internal/ident"
 	"github.com/symbolsecurity/cli/internal/output"
 )
 
@@ -101,7 +102,7 @@ func (rt *Runtime) webhooksUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <id>",
 		Short: "Update a webhook",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if cmd.Flags().Changed("endpoint") {
@@ -127,7 +128,7 @@ func (rt *Runtime) webhooksDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a webhook",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		Annotations: map[string]string{
 			"gotchas": "Destructive; requires --yes",
 		},
@@ -147,7 +148,7 @@ func (rt *Runtime) webhooksTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test <id>",
 		Short: "Send a test event to a webhook",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if event != "" {
@@ -216,7 +217,7 @@ func (rt *Runtime) ticketsConversationCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "conversation <id>",
 		Short: "List ticket conversation",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return rt.list(cmd, "/tickets/"+args[0]+"/conversations", nil, "message", []output.Breadcrumb{
 				crumb("reply", "symbol tickets reply <id> --body <text> --to <email>"),
@@ -231,7 +232,7 @@ func (rt *Runtime) ticketsNotesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "notes <id>",
 		Short: "List or add internal notes",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if body != "" {
 				fields := map[string][]string{"body": {body}}
@@ -259,7 +260,7 @@ func (rt *Runtime) ticketsReplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reply <id>",
 		Short: "Reply to a ticket",
-		Args:  cobra.ExactArgs(1),
+		Args:  uuidArg(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if body == "" || to == "" {
 				return rt.Out.Fail(output.Usage("body and to are required", "Pass --body and --to"))
@@ -293,6 +294,9 @@ func (rt *Runtime) ticketsStatusCmd() *cobra.Command {
 				return rt.list(cmd, "/tickets/statuses", nil, "status", []output.Breadcrumb{
 					crumb("update", "symbol tickets status <id> --to <status-id>"),
 				})
+			}
+			if err := ident.UUID(args[0], "id"); err != nil {
+				return rt.Out.Fail(err)
 			}
 			if to == "" {
 				return rt.Out.Fail(output.Usage("--to is required", "Pass --to <status-id> or omit the id to list statuses"))

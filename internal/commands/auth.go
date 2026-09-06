@@ -26,6 +26,9 @@ func (rt *Runtime) authLoginCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "login",
 		Short: "Exchange an API key for access tokens",
+		Annotations: map[string]string{
+			"gotchas": "Never pass the API key as argv; use SYMBOL_API_KEY or the prompt",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := strings.TrimSpace(rt.Env.Getenv("SYMBOL_API_KEY"))
 			if key == "" {

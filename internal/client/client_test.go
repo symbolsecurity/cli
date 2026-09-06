@@ -70,6 +70,24 @@ func TestRefreshOn401(t *testing.T) {
 	}
 }
 
+func TestNoRetryOnPost(t *testing.T) {
+	var n int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&n, 1)
+		w.WriteHeader(500)
+		io.WriteString(w, `{"message":"boom"}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(t, srv.URL)
+	_, err := c.Send(context.Background(), http.MethodPost, "/users/", map[string]string{"email": "a@b.c"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if atomic.LoadInt32(&n) != 1 {
+		t.Fatalf("retried POST: %d", n)
+	}
+}
+
 func TestRetryOn500(t *testing.T) {
 	var n int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +103,24 @@ func TestRetryOn500(t *testing.T) {
 	_, err := c.Get(context.Background(), "/users/", nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestScopedAuthFailsClosed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/auth/access/" {
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"message":"company not found"}`)
+			return
+		}
+		t.Fatalf("unexpected %s", r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(t, srv.URL)
+	c.CompanyID = "11111111-1111-1111-1111-111111111111"
+	_, err := c.Get(context.Background(), "/users/", nil)
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
 

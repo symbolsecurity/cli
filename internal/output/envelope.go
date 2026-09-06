@@ -37,6 +37,7 @@ type Envelope struct {
 	Code        string       `json:"code,omitempty"`
 	Retryable   bool         `json:"retryable,omitempty"`
 	Hint        string       `json:"hint,omitempty"`
+	RequestID   string       `json:"request_id,omitempty"`
 }
 
 type Error struct {
@@ -45,6 +46,7 @@ type Error struct {
 	Retryable bool
 	Hint      string
 	Status    int
+	RequestID string
 }
 
 func (e *Error) Error() string {
@@ -141,6 +143,7 @@ func (p *Printer) Fail(err error) error {
 		Code:      e.Code,
 		Retryable: e.Retryable,
 		Hint:      e.Hint,
+		RequestID: e.RequestID,
 	}
 	if p.Opts.Agent || p.jsonMode() {
 		if werr := p.writeJSON(env); werr != nil {

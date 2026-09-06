@@ -9,7 +9,7 @@ import (
 var (
 	ssnRe  = regexp.MustCompile(`^\d{3}-\d{2}-\d{4}$`)
 	ccnRe  = regexp.MustCompile(`^\d{13,19}$`)
-	keyRe  = regexp.MustCompile(`(?i)(password|passwd|secret|ssn|social.?security|credit.?card|card.?number|ccn|cvv|api[_-]?key|private[_-]?key|authorization)`)
+	keyRe  = regexp.MustCompile(`(?i)(password|passwd|secret|ssn|social.?security|credit.?card|card.?number|ccn|cvv|api[_-]?key|private[_-]?key|authorization|access[_-]?token|refresh[_-]?token|^token$)`)
 	skipRe = regexp.MustCompile(`(?i)(id|user_id|company_id|status|email|name)$`)
 )
 
