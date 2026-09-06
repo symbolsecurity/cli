@@ -182,6 +182,59 @@ func TestDryRunDelete(t *testing.T) {
 	}
 }
 
+func TestFullRequiresYes(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	out, err := run(t, srv, nil, "users", "list", "--full", "--json")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(out, "--yes") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestWrites(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Method+" "+r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, `{"ok":true}`)
+	}))
+	t.Cleanup(srv.Close)
+	uid := "11111111-1111-1111-1111-111111111111"
+	cases := [][]string{
+		{"users", "create", "--email", "a@b.c", "--first-name", "A", "--last-name", "B", "--json"},
+		{"users", "update", uid, "--title", "CEO", "--json"},
+		{"training", "assign", "--assets", uid, "--users", uid, "--json"},
+		{"policies", "assign", "--policy-id", uid, "--user-ids", uid, "--json"},
+		{"threats", "status", uid, "--to", "RESOLVED", "--json"},
+		{"webhooks", "create", "--endpoint", "https://example.com/hook", "--event-types", "user.created", "--json"},
+	}
+	for _, args := range cases {
+		out, err := run(t, srv, nil, args...)
+		if err != nil {
+			t.Fatalf("%v: %v %s", args, err, out)
+		}
+	}
+	want := []string{
+		"POST /users/",
+		"PUT /users/" + uid + "/",
+		"POST /training/assign",
+		"POST /policies/assign",
+		"PUT /cyber-threats/results/" + uid + "/change-status/",
+		"POST /event_subscriptions/",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+}
+
 func TestInvalidProfile(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(srv.Close)

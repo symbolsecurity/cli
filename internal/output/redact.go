@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	ssnRe  = regexp.MustCompile(`^\d{3}-\d{2}-\d{4}$`)
+	ssnRe  = regexp.MustCompile(`^\d{3}-?\d{2}-?\d{4}$`)
 	ccnRe  = regexp.MustCompile(`^\d{13,19}$`)
+	jwtRe  = regexp.MustCompile(`^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`)
 	keyRe  = regexp.MustCompile(`(?i)(password|passwd|secret|ssn|social.?security|credit.?card|card.?number|ccn|cvv|api[_-]?key|private[_-]?key|authorization|access[_-]?token|refresh[_-]?token|^token$)`)
 	skipRe = regexp.MustCompile(`(?i)(id|user_id|company_id|status|email|name)$`)
 )
@@ -61,6 +62,9 @@ func shouldRedactKey(key string) bool {
 
 func looksSecret(s string) bool {
 	s = strings.ReplaceAll(s, " ", "")
+	if jwtRe.MatchString(s) {
+		return true
+	}
 	if ssnRe.MatchString(s) {
 		return true
 	}

@@ -211,10 +211,6 @@ func (c *Client) ensureScoped(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) Path(companyPath string) string {
-	return companyPath
-}
-
 func (c *Client) resolve(path string, msp bool) string {
 	if msp || c.CompanyID == "" || c.scoped != nil {
 		return path

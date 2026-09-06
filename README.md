@@ -39,9 +39,12 @@ symbol completion bash
 ## Develop
 
 ```sh
-go test -race ./...
-go vet ./...
-gofmt -l .
+make test
+make vet
+make fmt
+make build
 ```
+
+See `CONTRIBUTING.md`. Releases use GoReleaser (`.goreleaser.yaml`).
 
 Secrets live in the OS keyring, with `~/.config/symbol/credentials.json` (0600) as fallback.

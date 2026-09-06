@@ -22,7 +22,16 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test -race ./...
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Coverage
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')
+          echo "coverage=${total}%"
+          awk -v t="$total" 'BEGIN { if ((t+0) < 45) { print "coverage below 45%: " t; exit 1 } }'
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
       - name: Build
         run: go build -ldflags "-X github.com/symbolsecurity/cli/internal/version.Commit=${GITHUB_SHA}" -o bin/symbol ./cmd/symbol
       - name: Vulnerability scan

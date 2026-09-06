@@ -224,6 +224,9 @@ func (rt *Runtime) setup(cmd *cobra.Command) error {
 	if rt.Verbose {
 		rt.Client.Log = rt.Env.Stderr
 	}
+	if rt.Full && !rt.Yes {
+		return rt.Out.Fail(output.Usage("--full requires --yes", "Pass --yes to disable PII redaction"))
+	}
 	if rt.Full {
 		fmt.Fprintln(rt.Env.Stderr, "warning: PII redaction disabled (--full)")
 	}

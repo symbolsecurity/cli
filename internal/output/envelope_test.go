@@ -59,14 +59,17 @@ func TestJQ(t *testing.T) {
 }
 
 func TestRedact(t *testing.T) {
+	jwt := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 	got := Redact(map[string]any{
 		"email":        "a@b.c",
 		"password":     "hunter2",
 		"ssn":          "123-45-6789",
 		"note":         "4111111111111111",
-		"accessToken":  "eyJhbGciOiJIUzI1NiJ9.aa.bb",
-		"refreshToken": "eyJhbGciOiJIUzI1NiJ9.cc.dd",
+		"accessToken":  jwt,
+		"refreshToken": jwt,
 		"token":        "secret-token",
+		"blob":         jwt,
+		"tax":          "123456789",
 	}).(map[string]any)
 	if got["email"] != "a@b.c" {
 		t.Fatalf("email redacted: %v", got["email"])
@@ -76,5 +79,11 @@ func TestRedact(t *testing.T) {
 	}
 	if got["accessToken"] != "[redacted]" || got["refreshToken"] != "[redacted]" || got["token"] != "[redacted]" {
 		t.Fatalf("tokens not redacted: %+v", got)
+	}
+	if got["blob"] != "[redacted]" {
+		t.Fatalf("JWT value not redacted: %+v", got["blob"])
+	}
+	if got["tax"] != "[redacted]" {
+		t.Fatalf("undashed SSN not redacted: %+v", got["tax"])
 	}
 }

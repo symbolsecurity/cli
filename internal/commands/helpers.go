@@ -59,8 +59,8 @@ func (rt *Runtime) mutate(cmd *cobra.Command, method, path string, body any, sum
 	return rt.Out.Success(data, summary, crumbs, nil)
 }
 
-func (rt *Runtime) companyPath(companyPath string) string {
-	return rt.Client.Path(companyPath)
+func (rt *Runtime) companyPath(p string) string {
+	return p
 }
 
 func csv(v string) []string {
