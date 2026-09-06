@@ -1,0 +1,6 @@
+bin/
+dist/
+.env
+credentials.json
+*.exe
+coverage.out
