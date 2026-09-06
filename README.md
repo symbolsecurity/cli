@@ -48,3 +48,5 @@ make build
 See `CONTRIBUTING.md`. Releases use GoReleaser (`.goreleaser.yaml`).
 
 Secrets live in the OS keyring, with `~/.config/symbol/credentials.json` (0600) as fallback.
+
+Licensed under MIT. See `LICENSE`.

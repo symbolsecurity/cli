@@ -1,7 +1,6 @@
 # Symbol CLI
 
 Standalone Go CLI + Agent Skill for the Symbol Security API.
-Not the Buffalo platform (`~/Documents/code/symbolsecurity/symbol`).
 
 **Read `PLAN.md` first.** Execute phases in order. Phase 0+1 is the first
 session unless the user says otherwise.
