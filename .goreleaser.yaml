@@ -6,6 +6,8 @@ builds:
   - id: symbol
     main: ./cmd/symbol
     binary: symbol
+    env:
+      - CGO_ENABLED=0
     ldflags:
       - -s -w -X github.com/symbolsecurity/cli/internal/version.Version={{.Version}} -X github.com/symbolsecurity/cli/internal/version.Commit={{.ShortCommit}}
     goos: [linux, darwin, windows]
@@ -13,12 +15,24 @@ builds:
 
 archives:
   - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats: [zip]
 
+checksum:
+  name_template: checksums.txt
+
 changelog:
   sort: asc
+  filters:
+    exclude:
+      - "^Merge"
 
 release:
-  draft: true
+  github:
+    owner: symbolsecurity
+    name: cli
+  draft: false
+  mode: append
+  make_latest: true

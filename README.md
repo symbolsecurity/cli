@@ -10,6 +10,12 @@ Agent  →  Skill  →  symbol CLI  →  API
 
 ## Install
 
+Pre-built binaries (Linux, macOS, Windows) are attached when a GitHub Release is published:
+
+https://github.com/symbolsecurity/cli/releases/latest
+
+Unpack `symbol` (or `symbol.exe`) onto `$PATH`.
+
 ```sh
 go install github.com/symbolsecurity/cli/cmd/symbol@latest
 ```
@@ -45,7 +51,7 @@ make fmt
 make build
 ```
 
-See `CONTRIBUTING.md`. Releases use GoReleaser (`.goreleaser.yaml`).
+See `CONTRIBUTING.md`. Publishing a GitHub Release runs GoReleaser and uploads binaries.
 
 Secrets live in the OS keyring, with `~/.config/symbol/credentials.json` (0600) as fallback.
 

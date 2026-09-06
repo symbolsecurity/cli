@@ -33,6 +33,8 @@ Talk to Symbol only through the `symbol` CLI. Do not call `api.symbolsecurity.co
 
 ## Setup
 
+If `symbol` is not on `$PATH`, install a pre-built binary from https://github.com/symbolsecurity/cli/releases/latest (Linux, macOS, Windows), or `go install github.com/symbolsecurity/cli/cmd/symbol@latest`.
+
 ```sh
 symbol doctor --json
 symbol auth login          # reads SYMBOL_API_KEY or prompts; never pass the key as argv
