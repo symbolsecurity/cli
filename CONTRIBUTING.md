@@ -1,5 +1,7 @@
 # Contributing
 
+This repository does not accept issues or pull requests.
+
 ```sh
 go test -race ./...
 go vet ./...

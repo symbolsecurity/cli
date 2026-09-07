@@ -55,4 +55,4 @@ See `CONTRIBUTING.md`. Publishing a GitHub Release runs GoReleaser and uploads b
 
 Secrets live in the OS keyring, with `~/.config/symbol/credentials.json` (0600) as fallback.
 
-Licensed under MIT. See `LICENSE`.
+Licensed under the O'Saasy License (MIT plus no competing SaaS). See `LICENSE`.
