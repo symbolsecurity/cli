@@ -1,6 +1,6 @@
 # Contributing
 
-This repository does not accept issues or pull requests.
+Issues are disabled. Pull requests from outside the Symbol Security org are not accepted.
 
 ```sh
 go test -race ./...
